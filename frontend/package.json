@@ -1,0 +1,24 @@
+{
+  "name": "virus-tracker-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "axios": "^1.5.0",
+    "buffer": "^6.0.3",
+    "d3": "^7.8.0",
+    "leaflet": "^1.9.0",
+    "pinia": "^2.1.6",
+    "plotly.js-dist-min": "^2.24.0",
+    "process": "^0.11.10",
+    "vue": "^3.3.0",
+    "vue-router": "^4.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.6.2",
+    "vite": "^4.4.0"
+  }
+}

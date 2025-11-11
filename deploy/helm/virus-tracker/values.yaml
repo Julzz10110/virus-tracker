@@ -1,0 +1,61 @@
+global:
+  imagePullPolicy: IfNotPresent
+
+backend:
+  replicaCount: 1
+  image:
+    repository: virus-tracker-backend
+    tag: latest
+  service:
+    type: ClusterIP
+    port: 8080
+  env:
+    databaseUrl: sqlite://data/virus_tracker.db
+    bioProcessorUrl: http://bio-processor:8000
+    jwtSecret: change-me
+    apiKey: ""
+    tokenTtlHours: "24"
+    growthAlertThreshold: "1.2"
+    rustLog: info
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+  resources: {}
+
+bioProcessor:
+  replicaCount: 1
+  image:
+    repository: virus-tracker-bio-processor
+    tag: latest
+  service:
+    type: ClusterIP
+    port: 8000
+  env:
+    backendBaseUrl: http://backend:8080/api
+    backendTimeoutSeconds: "10"
+  resources: {}
+
+frontend:
+  replicaCount: 1
+  image:
+    repository: virus-tracker-frontend
+    tag: latest
+  service:
+    type: ClusterIP
+    port: 80
+  env:
+    apiBaseUrl: http://backend:8080/api
+    apiKey: ""
+  resources: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: virus-tracker.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []

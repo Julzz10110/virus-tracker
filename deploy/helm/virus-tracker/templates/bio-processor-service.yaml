@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "virus-tracker.fullname" . }}-bio-processor
+  labels:
+    {{- include "virus-tracker.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.bioProcessor.service.type }}
+  ports:
+    - port: {{ .Values.bioProcessor.service.port }}
+      targetPort: 8000
+      name: http
+  selector:
+    app.kubernetes.io/component: bio-processor
+    {{- include "virus-tracker.labels" . | nindent 4 }}

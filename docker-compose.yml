@@ -1,0 +1,50 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+    image: virus-tracker-backend:dev
+    environment:
+      RUST_LOG: info
+      RUST_BACKTRACE: "1"
+      DATABASE_URL: sqlite://data/virus_tracker.db
+      BIO_PROCESSOR_URL: http://bio-processor:8000
+      JWT_SECRET: change_me_in_prod
+      API_KEY: demo-ingest-key
+      TOKEN_TTL_HOURS: "24"
+      GROWTH_ALERT_THRESHOLD: "1.2"
+    ports:
+      - "8080:8080"
+    volumes:
+      - backend-data:/data
+    depends_on:
+      - bio-processor
+    restart: unless-stopped
+
+  bio-processor:
+    build:
+      context: ./bio_processor
+    image: virus-tracker-bio-processor:dev
+    environment:
+      BACKEND_BASE_URL: http://backend:8080/api
+      BACKEND_TIMEOUT_SECONDS: "10"
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8080/api
+        VITE_API_KEY: demo-ingest-key
+    image: virus-tracker-frontend:dev
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+
+volumes:
+  backend-data:

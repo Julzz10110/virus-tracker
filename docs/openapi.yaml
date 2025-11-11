@@ -1,0 +1,545 @@
+openapi: 3.0.3
+info:
+  title: Virus Tracker API
+  version: 1.0.0
+  description: |
+    REST interface for the virus evolution tracking platform. Exposes sequence analytics,
+    epidemiological metrics, authentication, and administrative capabilities implemented in the
+    Rust Axum service. Most endpoints are available under the `/api` prefix.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://virus-tracker.example.com
+    description: Production (example)
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: Static API key for privileged ingestion endpoints.
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
+    Mutation:
+      type: object
+      properties:
+        gene:
+          type: string
+        position:
+          type: integer
+        reference:
+          type: string
+          maxLength: 1
+        mutation:
+          type: string
+          maxLength: 1
+      required: [gene, position, reference, mutation]
+    VirusVariant:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        lineage:
+          type: string
+        location:
+          type: string
+        date:
+          type: string
+          format: date-time
+        sequence:
+          type: string
+        mutations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Mutation'
+      required: [id, name, lineage, location, date, sequence, mutations]
+    UploadVariantRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        lineage:
+          type: string
+        location:
+          type: string
+        sequence:
+          type: string
+          description: Nucleotide sequence in plain text.
+      required: [name, lineage, location, sequence]
+    VariantStats:
+      type: object
+      properties:
+        total_variants:
+          type: integer
+        unique_locations:
+          type: integer
+        total_mutations:
+          type: integer
+        average_mutations_per_variant:
+          type: number
+          format: float
+      required: [total_variants, unique_locations, total_mutations, average_mutations_per_variant]
+    AnalysisRequest:
+      type: object
+      properties:
+        sequences:
+          type: array
+          items:
+            type: string
+        reference:
+          type: string
+      required: [sequences, reference]
+    AnalysisResponse:
+      type: object
+      properties:
+        mutations:
+          type: array
+          description: Mutation calls per input sequence.
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/Mutation'
+        computation_time:
+          type: number
+          format: float
+      required: [mutations, computation_time]
+    MutationAnalysis:
+      type: object
+      properties:
+        gene:
+          type: string
+        position:
+          type: integer
+        reference:
+          type: string
+        mutation:
+          type: string
+        frequency:
+          type: number
+          format: float
+        entropy:
+          type: number
+          format: float
+      required: [gene, position, reference, mutation, frequency, entropy]
+    ReferenceResponse:
+      type: object
+      properties:
+        reference:
+          type: string
+      required: [reference]
+    GrowthMetric:
+      type: object
+      properties:
+        collected_at:
+          type: string
+          format: date-time
+        total_variants:
+          type: integer
+        growth_rate:
+          type: number
+          format: float
+          nullable: true
+        reproduction_number:
+          type: number
+          format: float
+          nullable: true
+        doubling_time:
+          type: number
+          format: float
+          nullable: true
+      required: [collected_at, total_variants]
+    GrowthSummary:
+      type: object
+      properties:
+        total_count:
+          type: integer
+        growth_rate:
+          type: number
+          format: float
+          nullable: true
+        reproduction_number:
+          type: number
+          format: float
+          nullable: true
+        doubling_time:
+          type: number
+          format: float
+          nullable: true
+      required: [total_count]
+    PhylogenyNode:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        branch_length:
+          type: number
+          format: float
+          nullable: true
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhylogenyNode'
+          default: []
+      required: [children]
+    PhylogenyResponse:
+      type: object
+      properties:
+        tree:
+          $ref: '#/components/schemas/PhylogenyNode'
+        alignment:
+          type: object
+          nullable: true
+          properties:
+            consensus:
+              type: string
+            length:
+              type: integer
+            record_count:
+              type: integer
+        count:
+          type: integer
+      required: [tree]
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [email, password]
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+      required: [token, roles]
+    CreateUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+          description: Optional role list, defaults to `viewer`.
+      required: [email, password]
+    CreateUserResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+      required: [user_id, roles]
+    UserSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        roles:
+          type: array
+          items:
+            type: string
+      required: [id, email, created_at, roles]
+paths:
+  /api/health:
+    get:
+      summary: Liveness probe
+      responses:
+        '200':
+          description: Healthy response
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
+  /api/variants:
+    get:
+      summary: List tracked variants
+      parameters:
+        - in: query
+          name: lineage
+          schema:
+            type: string
+        - in: query
+          name: location
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Collection of tracked variants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VirusVariant'
+        default:
+          description: Error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/variants/stats:
+    get:
+      summary: Variant statistics summary
+      responses:
+        '200':
+          description: Aggregated metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VariantStats'
+        default:
+          description: Error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/upload:
+    post:
+      summary: Upload a new variant and derive mutations
+      security:
+        - ApiKeyAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadVariantRequest'
+      responses:
+        '201':
+          description: Variant created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirusVariant'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        default:
+          description: Error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/reference:
+    get:
+      summary: Retrieve the current reference genome
+      responses:
+        '200':
+          description: Reference sequence
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferenceResponse'
+    post:
+      summary: Update the reference genome
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferenceResponse'
+      responses:
+        '200':
+          description: Updated reference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferenceResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /api/analyze:
+    post:
+      summary: Offline mutation analysis for raw sequences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalysisRequest'
+      responses:
+        '200':
+          description: Mutation analysis results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisResponse'
+        default:
+          description: Error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/analysis/frequency:
+    get:
+      summary: Mutation frequency across tracked variants
+      parameters:
+        - in: query
+          name: lineage
+          schema:
+            type: string
+        - in: query
+          name: location
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Mutation frequencies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MutationAnalysis'
+  /api/analysis/phylogeny:
+    get:
+      summary: Proxy to phylogenetic reconstruction service
+      parameters:
+        - in: query
+          name: lineage
+          schema:
+            type: string
+        - in: query
+          name: location
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Phylogeny results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhylogenyResponse'
+  /api/metrics/growth:
+    get:
+      summary: Historical epidemiological metrics
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            default: 30
+      responses:
+        '200':
+          description: Series of stored growth metrics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GrowthMetric'
+  /api/metrics/growth/live:
+    get:
+      summary: Live growth snapshot from bio-processor
+      responses:
+        '200':
+          description: Latest metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrowthSummary'
+  /metrics:
+    get:
+      summary: Prometheus scrape endpoint
+      responses:
+        '200':
+          description: Prometheus exposition format
+          content:
+            text/plain:
+              schema:
+                type: string
+  /api/auth/login:
+    post:
+      summary: Authenticate and retrieve JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+  /api/admin/users:
+    get:
+      summary: List users and roles
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Collection of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserSummary'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      summary: Create a new user with optional role assignments
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateUserResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
