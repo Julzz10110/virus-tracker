@@ -186,4 +186,4 @@ Background tasks poll the bio processor hourly to persist growth metrics; adjust
 
 ---
 
-For detailed component instructions, see the READMEs within each subdirectory. A project summary and future roadmap are provided at the end of this response.
+For detailed component instructions, see the READMEs within each subdirectory.
